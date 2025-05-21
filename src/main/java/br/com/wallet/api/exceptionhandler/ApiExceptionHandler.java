@@ -34,6 +34,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, problemDetail, new HttpHeaders(), status, request);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Object> handleIllegalArgument(@NonNull IllegalArgumentException ex, @NonNull WebRequest request) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+
+        ProblemDetail problemDetail = ProblemDetail.builder()
+                .status(status.value())
+                .title("Business rule violation")
+                .detail(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return handleExceptionInternal(ex, problemDetail, new HttpHeaders(), status, request);
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             @NonNull MethodArgumentNotValidException ex,

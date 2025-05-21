@@ -43,27 +43,26 @@ public class UserWalletService {
 
     @Transactional
     public UserWallet save(UserWallet userWallet) {
-        // Verify that the wallet exists
+
         Wallet wallet = walletService.findById(userWallet.getWallet().getId());
         userWallet.setWallet(wallet);
-        
+
         return userWalletRepository.save(userWallet);
     }
 
     @Transactional
     public UserWallet update(UUID id, UserWallet userWallet) {
         UserWallet existingUserWallet = findById(id);
-        
-        // Verify that the wallet exists if it's being changed
+
         if (!existingUserWallet.getWallet().getId().equals(userWallet.getWallet().getId())) {
             Wallet wallet = walletService.findById(userWallet.getWallet().getId());
             userWallet.setWallet(wallet);
         }
-        
+
         userWallet.setId(existingUserWallet.getId());
         userWallet.setCreatedAt(existingUserWallet.getCreatedAt());
         userWallet.setBalance(existingUserWallet.getBalance()); // Preserve the balance
-        
+
         return userWalletRepository.save(userWallet);
     }
 
