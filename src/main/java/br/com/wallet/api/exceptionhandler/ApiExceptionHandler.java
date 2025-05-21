@@ -5,6 +5,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.NonNull;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -20,33 +21,33 @@ import java.util.Map;
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<Object> handleEntityNotFound(EntityNotFoundException ex, WebRequest request) {
+    public ResponseEntity<Object> handleEntityNotFound(@NonNull EntityNotFoundException ex, @NonNull WebRequest request) {
         HttpStatus status = HttpStatus.NOT_FOUND;
-        
+
         ProblemDetail problemDetail = ProblemDetail.builder()
                 .status(status.value())
                 .title("Resource not found")
                 .detail(ex.getMessage())
                 .timestamp(LocalDateTime.now())
                 .build();
-        
+
         return handleExceptionInternal(ex, problemDetail, new HttpHeaders(), status, request);
     }
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException ex, 
-            HttpHeaders headers, 
-            HttpStatusCode status, 
-            WebRequest request) {
-        
+            @NonNull MethodArgumentNotValidException ex,
+            @NonNull HttpHeaders headers,
+            @NonNull HttpStatusCode status,
+            @NonNull WebRequest request) {
+
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach(error -> {
             String fieldName = ((FieldError) error).getField();
             String errorMessage = error.getDefaultMessage();
             errors.put(fieldName, errorMessage);
         });
-        
+
         ProblemDetail problemDetail = ProblemDetail.builder()
                 .status(status.value())
                 .title("Validation error")
@@ -54,7 +55,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 .timestamp(LocalDateTime.now())
                 .fields(errors)
                 .build();
-        
+
         return handleExceptionInternal(ex, problemDetail, headers, status, request);
     }
 }
