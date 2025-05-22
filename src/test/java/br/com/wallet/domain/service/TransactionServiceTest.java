@@ -1,31 +1,31 @@
 package br.com.wallet.domain.service;
 
-import br.com.wallet.domain.model.BalanceHistory;
 import br.com.wallet.domain.model.Transaction;
-import br.com.wallet.domain.model.UserWallet;
 import br.com.wallet.domain.model.Wallet;
-import br.com.wallet.domain.repository.BalanceHistoryRepository;
 import br.com.wallet.domain.repository.TransactionRepository;
-import br.com.wallet.domain.repository.UserWalletRepository;
+import br.com.wallet.domain.service.transaction.TransactionProcessor;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceTest {
@@ -34,29 +34,24 @@ class TransactionServiceTest {
     private TransactionRepository transactionRepository;
 
     @Mock
-    private UserWalletRepository userWalletRepository;
-
-    @Mock
-    private BalanceHistoryRepository balanceHistoryRepository;
-
-    @Mock
     private WalletService walletService;
+
+    @Mock
+    private TransactionProcessor depositProcessor;
+
+    @Mock
+    private TransactionProcessor withdrawProcessor;
+
+    @Mock
+    private TransactionProcessor transferProcessor;
 
     @InjectMocks
     private TransactionService transactionService;
-
-    @Captor
-    private ArgumentCaptor<UserWallet> userWalletCaptor;
-
-    @Captor
-    private ArgumentCaptor<BalanceHistory> balanceHistoryCaptor;
 
     private UUID walletId;
     private UUID fromUserId;
     private UUID toUserId;
     private Wallet wallet;
-    private UserWallet fromUserWallet;
-    private UserWallet toUserWallet;
     private Transaction transaction;
 
     @BeforeEach
@@ -64,31 +59,34 @@ class TransactionServiceTest {
         walletId = UUID.randomUUID();
         fromUserId = UUID.randomUUID();
         toUserId = UUID.randomUUID();
-
         wallet = Wallet.builder()
                 .id(walletId)
                 .name("Test Wallet")
                 .build();
-
-        fromUserWallet = UserWallet.builder()
-                .id(UUID.randomUUID())
-                .userId(fromUserId)
-                .wallet(wallet)
-                .balance(new BigDecimal("100.00"))
-                .build();
-
-        toUserWallet = UserWallet.builder()
-                .id(UUID.randomUUID())
-                .userId(toUserId)
-                .wallet(wallet)
-                .balance(new BigDecimal("50.00"))
-                .build();
-
         transaction = Transaction.builder()
                 .id(UUID.randomUUID())
                 .amount(new BigDecimal("25.00"))
                 .description("Test transaction")
                 .build();
+
+        Mockito.lenient().when(depositProcessor.canProcess(Transaction.TransactionType.DEPOSIT)).thenReturn(true);
+        Mockito.lenient().when(depositProcessor.canProcess(Transaction.TransactionType.WITHDRAW)).thenReturn(false);
+        Mockito.lenient().when(depositProcessor.canProcess(Transaction.TransactionType.TRANSFER)).thenReturn(false);
+
+        Mockito.lenient().when(withdrawProcessor.canProcess(Transaction.TransactionType.DEPOSIT)).thenReturn(false);
+        Mockito.lenient().when(withdrawProcessor.canProcess(Transaction.TransactionType.WITHDRAW)).thenReturn(true);
+        Mockito.lenient().when(withdrawProcessor.canProcess(Transaction.TransactionType.TRANSFER)).thenReturn(false);
+
+        Mockito.lenient().when(transferProcessor.canProcess(Transaction.TransactionType.DEPOSIT)).thenReturn(false);
+        Mockito.lenient().when(transferProcessor.canProcess(Transaction.TransactionType.WITHDRAW)).thenReturn(false);
+        Mockito.lenient().when(transferProcessor.canProcess(Transaction.TransactionType.TRANSFER)).thenReturn(true);
+
+        // Set up the transactionProcessors list in the TransactionService
+        List<TransactionProcessor> processors = new ArrayList<>();
+        processors.add(depositProcessor);
+        processors.add(withdrawProcessor);
+        processors.add(transferProcessor);
+        ReflectionTestUtils.setField(transactionService, "transactionProcessors", processors);
     }
 
     @Test
@@ -112,24 +110,24 @@ class TransactionServiceTest {
     @Test
     void shouldThrowExceptionWhenProcessingTransactionWithWalletWithNullTransaction() {
         // When & Then
-        assertThrows(NullPointerException.class, () -> 
-            transactionService.processTransactionWithWallet(null, walletId, t -> t)
+        assertThrows(NullPointerException.class, () ->
+                transactionService.processTransactionWithWallet(null, walletId, t -> t)
         );
     }
 
     @Test
     void shouldThrowExceptionWhenProcessingTransactionWithWalletWithNullWalletId() {
         // When & Then
-        assertThrows(NullPointerException.class, () -> 
-            transactionService.processTransactionWithWallet(transaction, null, t -> t)
+        assertThrows(NullPointerException.class, () ->
+                transactionService.processTransactionWithWallet(transaction, null, t -> t)
         );
     }
 
     @Test
     void shouldThrowExceptionWhenProcessingTransactionWithWalletWithNullProcessor() {
         // When & Then
-        assertThrows(NullPointerException.class, () -> 
-            transactionService.processTransactionWithWallet(transaction, walletId, null)
+        assertThrows(NullPointerException.class, () ->
+                transactionService.processTransactionWithWallet(transaction, walletId, null)
         );
     }
 
@@ -140,23 +138,16 @@ class TransactionServiceTest {
         transaction.setToUserId(toUserId);
         transaction.setWallet(wallet);
 
-        when(userWalletRepository.findByUserIdAndWalletId(toUserId, walletId))
-                .thenReturn(Optional.of(toUserWallet));
-        when(userWalletRepository.save(any(UserWallet.class))).thenReturn(toUserWallet);
-        when(balanceHistoryRepository.save(any(BalanceHistory.class))).thenReturn(new BalanceHistory());
-        when(transactionRepository.save(any(Transaction.class))).thenReturn(transaction);
+        when(depositProcessor.process(transaction)).thenReturn(transaction);
 
         // When
         Transaction result = transactionService.deposit(transaction);
 
         // Then
+        assertNotNull(result);
         assertEquals(transaction, result);
-        verify(userWalletRepository).save(userWalletCaptor.capture());
-        verify(balanceHistoryRepository).save(any(BalanceHistory.class));
-        verify(transactionRepository).save(transaction);
 
-        UserWallet savedUserWallet = userWalletCaptor.getValue();
-        assertEquals(new BigDecimal("75.00"), savedUserWallet.getBalance());
+        verify(depositProcessor).process(transaction);
     }
 
     @Test
@@ -164,8 +155,12 @@ class TransactionServiceTest {
         // Given
         transaction.setType(Transaction.TransactionType.WITHDRAW);
 
+        when(depositProcessor.process(transaction)).thenThrow(new IllegalArgumentException("Transaction type must be DEPOSIT"));
+
         // When & Then
         assertThrows(IllegalArgumentException.class, () -> transactionService.deposit(transaction));
+
+        verify(depositProcessor).process(transaction);
     }
 
     @Test
@@ -174,8 +169,12 @@ class TransactionServiceTest {
         transaction.setType(Transaction.TransactionType.DEPOSIT);
         transaction.setAmount(BigDecimal.ZERO);
 
+        when(depositProcessor.process(transaction)).thenThrow(new IllegalArgumentException("Amount must be greater than zero"));
+
         // When & Then
         assertThrows(IllegalArgumentException.class, () -> transactionService.deposit(transaction));
+
+        verify(depositProcessor).process(transaction);
     }
 
     @Test
@@ -184,13 +183,13 @@ class TransactionServiceTest {
         transaction.setType(Transaction.TransactionType.DEPOSIT);
         transaction.setToUserId(toUserId);
         transaction.setWallet(wallet);
-        transaction.setAmount(new BigDecimal("25.00"));
 
-        when(userWalletRepository.findByUserIdAndWalletId(toUserId, walletId))
-                .thenReturn(Optional.empty());
+        when(depositProcessor.process(transaction)).thenThrow(new EntityNotFoundException("UserWallet not found with userId: " + toUserId + " and walletId: " + walletId));
 
         // When & Then
         assertThrows(EntityNotFoundException.class, () -> transactionService.deposit(transaction));
+
+        verify(depositProcessor).process(transaction);
     }
 
     @Test
@@ -200,23 +199,16 @@ class TransactionServiceTest {
         transaction.setFromUserId(fromUserId);
         transaction.setWallet(wallet);
 
-        when(userWalletRepository.findByUserIdAndWalletId(fromUserId, walletId))
-                .thenReturn(Optional.of(fromUserWallet));
-        when(userWalletRepository.save(any(UserWallet.class))).thenReturn(fromUserWallet);
-        when(balanceHistoryRepository.save(any(BalanceHistory.class))).thenReturn(new BalanceHistory());
-        when(transactionRepository.save(any(Transaction.class))).thenReturn(transaction);
+        when(withdrawProcessor.process(transaction)).thenReturn(transaction);
 
         // When
         Transaction result = transactionService.withdraw(transaction);
 
         // Then
+        assertNotNull(result);
         assertEquals(transaction, result);
-        verify(userWalletRepository).save(userWalletCaptor.capture());
-        verify(balanceHistoryRepository).save(any(BalanceHistory.class));
-        verify(transactionRepository).save(transaction);
 
-        UserWallet savedUserWallet = userWalletCaptor.getValue();
-        assertEquals(new BigDecimal("75.00"), savedUserWallet.getBalance());
+        verify(withdrawProcessor).process(transaction);
     }
 
     @Test
@@ -224,8 +216,12 @@ class TransactionServiceTest {
         // Given
         transaction.setType(Transaction.TransactionType.DEPOSIT);
 
+        when(withdrawProcessor.process(transaction)).thenThrow(new IllegalArgumentException("Transaction type must be WITHDRAW"));
+
         // When & Then
         assertThrows(IllegalArgumentException.class, () -> transactionService.withdraw(transaction));
+
+        verify(withdrawProcessor).process(transaction);
     }
 
     @Test
@@ -236,11 +232,12 @@ class TransactionServiceTest {
         transaction.setWallet(wallet);
         transaction.setAmount(new BigDecimal("150.00"));
 
-        when(userWalletRepository.findByUserIdAndWalletId(fromUserId, walletId))
-                .thenReturn(Optional.of(fromUserWallet));
+        when(withdrawProcessor.process(transaction)).thenThrow(new IllegalArgumentException("Insufficient balance"));
 
         // When & Then
         assertThrows(IllegalArgumentException.class, () -> transactionService.withdraw(transaction));
+
+        verify(withdrawProcessor).process(transaction);
     }
 
     @Test
@@ -251,35 +248,16 @@ class TransactionServiceTest {
         transaction.setToUserId(toUserId);
         transaction.setWallet(wallet);
 
-        Transaction relatedTransaction = Transaction.builder()
-                .id(UUID.randomUUID())
-                .build();
-
-        when(userWalletRepository.findByUserIdAndWalletId(fromUserId, walletId))
-                .thenReturn(Optional.of(fromUserWallet));
-        when(userWalletRepository.findByUserIdAndWalletId(toUserId, walletId))
-                .thenReturn(Optional.of(toUserWallet));
-        when(userWalletRepository.save(any(UserWallet.class)))
-                .thenReturn(fromUserWallet)
-                .thenReturn(toUserWallet);
-        when(balanceHistoryRepository.save(any(BalanceHistory.class))).thenReturn(new BalanceHistory());
-        when(transactionRepository.save(any(Transaction.class)))
-                .thenReturn(transaction)
-                .thenReturn(relatedTransaction)
-                .thenReturn(transaction);
+        when(transferProcessor.process(transaction)).thenReturn(transaction);
 
         // When
         Transaction result = transactionService.transfer(transaction);
 
         // Then
+        assertNotNull(result);
         assertEquals(transaction, result);
-        verify(userWalletRepository, times(2)).save(userWalletCaptor.capture());
-        verify(balanceHistoryRepository, times(2)).save(any(BalanceHistory.class));
-        verify(transactionRepository, times(3)).save(any(Transaction.class));
 
-        List<UserWallet> savedUserWallets = userWalletCaptor.getAllValues();
-        assertEquals(new BigDecimal("75.00"), savedUserWallets.get(0).getBalance()); // fromUserWallet
-        assertEquals(new BigDecimal("75.00"), savedUserWallets.get(1).getBalance()); // toUserWallet
+        verify(transferProcessor).process(transaction);
     }
 
     @Test
@@ -287,8 +265,12 @@ class TransactionServiceTest {
         // Given
         transaction.setType(Transaction.TransactionType.DEPOSIT);
 
+        when(transferProcessor.process(transaction)).thenThrow(new IllegalArgumentException("Transaction type must be TRANSFER"));
+
         // When & Then
         assertThrows(IllegalArgumentException.class, () -> transactionService.transfer(transaction));
+
+        verify(transferProcessor).process(transaction);
     }
 
     @Test
@@ -298,8 +280,12 @@ class TransactionServiceTest {
         transaction.setFromUserId(null);
         transaction.setToUserId(toUserId);
 
+        when(transferProcessor.process(transaction)).thenThrow(new NullPointerException("From user ID is required for transfers"));
+
         // When & Then
         assertThrows(NullPointerException.class, () -> transactionService.transfer(transaction));
+
+        verify(transferProcessor).process(transaction);
     }
 
     @Test
@@ -309,8 +295,12 @@ class TransactionServiceTest {
         transaction.setFromUserId(fromUserId);
         transaction.setToUserId(null);
 
+        when(transferProcessor.process(transaction)).thenThrow(new NullPointerException("To user ID is required for transfers"));
+
         // When & Then
         assertThrows(NullPointerException.class, () -> transactionService.transfer(transaction));
+
+        verify(transferProcessor).process(transaction);
     }
 
     @Test
