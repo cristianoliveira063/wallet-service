@@ -15,14 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 @Service
 @RequiredArgsConstructor
 public class TransactionService {
-
     private final TransactionRepository transactionRepository;
     private final UserWalletRepository userWalletRepository;
     private final BalanceHistoryRepository balanceHistoryRepository;
@@ -33,10 +31,8 @@ public class TransactionService {
         Objects.requireNonNull(transaction, "Transaction cannot be null");
         Objects.requireNonNull(walletId, "Wallet ID cannot be null");
         Objects.requireNonNull(transactionProcessor, "Transaction processor cannot be null");
-
         Wallet wallet = findWalletById(walletId);
         transaction.setWallet(wallet);
-
         return transactionProcessor.apply(transaction);
     }
 
@@ -44,20 +40,10 @@ public class TransactionService {
     public Transaction deposit(Transaction transaction) {
         validateTransactionType(transaction, Transaction.TransactionType.DEPOSIT);
         validateAmount(transaction.getAmount());
-
-        Optional<UserWallet> optionalUserWallet = userWalletRepository.findByUserIdAndWalletId(
-                transaction.getToUserId(), transaction.getWallet().getId());
-
-        if (optionalUserWallet.isEmpty()) {
-            throw new EntityNotFoundException("UserWallet not found with userId: " +
-                    transaction.getToUserId() + " and walletId: " + transaction.getWallet().getId());
-        }
-
-        UserWallet userWallet = optionalUserWallet.get();
-        updateWalletBalance(userWallet, transaction.getAmount(), true);
-
+        UserWallet userWallet = getUserWalletOrThrow(transaction.getToUserId(),
+                transaction.getWallet().getId(), "UserWallet not found with userId: ");
+        creditUserWallet(userWallet, transaction.getAmount());
         transaction.setRelatedTransaction(null);
-
         return transactionRepository.save(transaction);
     }
 
@@ -65,61 +51,35 @@ public class TransactionService {
     public Transaction withdraw(Transaction transaction) {
         validateTransactionType(transaction, Transaction.TransactionType.WITHDRAW);
         validateAmount(transaction.getAmount());
-
-        Optional<UserWallet> optionalUserWallet = userWalletRepository.findByUserIdAndWalletId(
-                transaction.getFromUserId(), transaction.getWallet().getId());
-
-        if (optionalUserWallet.isEmpty()) {
-            throw new EntityNotFoundException("UserWallet not found with userId: " +
-                    transaction.getFromUserId() + " and walletId: " + transaction.getWallet().getId());
-        }
-
-        UserWallet userWallet = optionalUserWallet.get();
+        UserWallet userWallet = getUserWalletOrThrow(transaction.getFromUserId(),
+                transaction.getWallet().getId(), "UserWallet not found with userId: ");
         validateSufficientBalance(userWallet, transaction.getAmount());
-
-        updateWalletBalance(userWallet, transaction.getAmount(), false);
-
+        debitUserWallet(userWallet, transaction.getAmount());
+        transaction.setRelatedTransaction(null);
         return transactionRepository.save(transaction);
     }
 
     @Transactional
     public Transaction transfer(Transaction transaction) {
+
         validateTransactionType(transaction, Transaction.TransactionType.TRANSFER);
         validateAmount(transaction.getAmount());
         validateTransferUsers(transaction);
 
-        Optional<UserWallet> optionalSourceUserWallet = userWalletRepository.findByUserIdAndWalletId(
-                transaction.getFromUserId(), transaction.getWallet().getId());
-
-        if (optionalSourceUserWallet.isEmpty()) {
-            throw new EntityNotFoundException("Source UserWallet not found with userId: " +
-                    transaction.getFromUserId() + " and walletId: " + transaction.getWallet().getId());
-        }
-
-        UserWallet sourceUserWallet = optionalSourceUserWallet.get();
+        UserWallet sourceUserWallet = getUserWalletOrThrow(transaction.getFromUserId(),
+                transaction.getWallet().getId(), "Source UserWallet not found with userId: ");
         validateSufficientBalance(sourceUserWallet, transaction.getAmount());
-
-        Optional<UserWallet> optionalTargetUserWallet = userWalletRepository.findByUserIdAndWalletId(
-                transaction.getToUserId(), transaction.getWallet().getId());
-
-        if (optionalTargetUserWallet.isEmpty()) {
-            throw new EntityNotFoundException("Target UserWallet not found with userId: " +
-                    transaction.getToUserId() + " and walletId: " + transaction.getWallet().getId());
-        }
-
-        UserWallet targetUserWallet = optionalTargetUserWallet.get();
-
-        updateWalletBalance(sourceUserWallet, transaction.getAmount(), false);
-        updateWalletBalance(targetUserWallet, transaction.getAmount(), true);
+        UserWallet targetUserWallet = getUserWalletOrThrow(transaction.getToUserId(),
+                transaction.getWallet().getId(), "Target UserWallet not found with userId: ");
+        debitUserWallet(sourceUserWallet, transaction.getAmount());
+        creditUserWallet(targetUserWallet, transaction.getAmount());
 
         Transaction savedSourceTransaction = transactionRepository.save(transaction);
-
         Transaction targetTransaction = createRelatedTransaction(transaction, savedSourceTransaction);
         Transaction savedTargetTransaction = transactionRepository.save(targetTransaction);
 
         savedSourceTransaction.setRelatedTransaction(savedTargetTransaction);
         transactionRepository.save(savedSourceTransaction);
-
         return savedSourceTransaction;
     }
 
@@ -135,7 +95,6 @@ public class TransactionService {
     private void validateTransactionType(Transaction transaction, Transaction.TransactionType expectedType) {
         Objects.requireNonNull(transaction, "Transaction cannot be null");
         Objects.requireNonNull(expectedType, "Expected transaction type cannot be null");
-
         if (transaction.getType() != expectedType) {
             throw new IllegalArgumentException("Transaction type must be " + expectedType);
         }
@@ -143,7 +102,6 @@ public class TransactionService {
 
     private void validateAmount(BigDecimal amount) {
         Objects.requireNonNull(amount, "Amount cannot be null");
-
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Amount must be greater than zero");
         }
@@ -152,7 +110,6 @@ public class TransactionService {
     private void validateSufficientBalance(UserWallet userWallet, BigDecimal amount) {
         Objects.requireNonNull(userWallet, "User wallet cannot be null");
         Objects.requireNonNull(amount, "Amount cannot be null");
-
         if (userWallet.getBalance().compareTo(amount) < 0) {
             throw new IllegalArgumentException("Insufficient balance");
         }
@@ -164,24 +121,32 @@ public class TransactionService {
         Objects.requireNonNull(transaction.getToUserId(), "To user ID is required for transfers");
     }
 
-    private void updateWalletBalance(UserWallet userWallet, BigDecimal amount, boolean isCredit) {
+    private UserWallet getUserWalletOrThrow(UUID userId, UUID walletId, String notFoundMessage) {
+        return userWalletRepository.findByUserIdAndWalletId(userId, walletId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        notFoundMessage + userId + " and walletId: " + walletId
+                ));
+    }
+
+    private void creditUserWallet(UserWallet userWallet, BigDecimal amount) {
+        updateUserWalletBalance(userWallet, amount, true);
+    }
+
+    private void debitUserWallet(UserWallet userWallet, BigDecimal amount) {
+        updateUserWalletBalance(userWallet, amount, false);
+    }
+
+    private void updateUserWalletBalance(UserWallet userWallet, BigDecimal amount, boolean isCredit) {
         Objects.requireNonNull(userWallet, "User wallet cannot be null");
         Objects.requireNonNull(amount, "Amount cannot be null");
-
-        if (isCredit) {
-            userWallet.setBalance(userWallet.getBalance().add(amount));
-        } else {
-            userWallet.setBalance(userWallet.getBalance().subtract(amount));
-        }
+        userWallet.setBalance(isCredit ? userWallet.getBalance().add(amount) : userWallet.getBalance().subtract(amount));
         userWalletRepository.save(userWallet);
-
         recordBalanceHistory(userWallet);
     }
 
     private Transaction createRelatedTransaction(Transaction sourceTransaction, Transaction savedSourceTransaction) {
         Objects.requireNonNull(sourceTransaction, "Source transaction cannot be null");
         Objects.requireNonNull(savedSourceTransaction, "Saved source transaction cannot be null");
-
         return Transaction.builder()
                 .wallet(sourceTransaction.getWallet())
                 .fromUserId(sourceTransaction.getFromUserId())
@@ -196,13 +161,11 @@ public class TransactionService {
     private void recordBalanceHistory(UserWallet userWallet) {
         Objects.requireNonNull(userWallet, "User wallet cannot be null");
         Objects.requireNonNull(userWallet.getWallet(), "Wallet cannot be null");
-
         BalanceHistory balanceHistory = BalanceHistory.builder()
                 .userId(userWallet.getUserId())
                 .wallet(userWallet.getWallet().getId())
                 .balance(userWallet.getBalance())
                 .build();
-
         balanceHistoryRepository.save(balanceHistory);
     }
 
