@@ -4,9 +4,7 @@ import br.com.wallet.api.assembler.TransactionAssembler;
 import br.com.wallet.api.model.request.TransactionRequest;
 import br.com.wallet.api.model.response.TransactionResponse;
 import br.com.wallet.domain.model.Transaction;
-import br.com.wallet.domain.model.Wallet;
 import br.com.wallet.domain.service.TransactionService;
-import br.com.wallet.domain.service.WalletService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -74,14 +72,23 @@ public class TransactionController {
             Transaction.TransactionType transactionType,
             UnaryOperator<Transaction> transactionProcessor) {
 
-        transactionRequest.validate();
+        TransactionRequest requestWithCorrectType = new TransactionRequest(
+                transactionRequest.walletId(),
+                transactionRequest.fromUserId(),
+                transactionRequest.toUserId(),
+                transactionType,
+                transactionRequest.amount(),
+                transactionRequest.description(),
+                transactionRequest.relatedTransactionId()
+        );
 
-        Transaction transaction = transactionAssembler.mapToTransactionEntityFromRequest(transactionRequest);
-        transaction.setType(transactionType);
+        requestWithCorrectType.validate();
+
+        Transaction transaction = transactionAssembler.mapToTransactionEntityFromRequest(requestWithCorrectType);
 
         Transaction savedTransaction = transactionService.processTransactionWithWallet(
-                transaction, 
-                transactionRequest.walletId(), 
+                transaction,
+                requestWithCorrectType.walletId(),
                 transactionProcessor
         );
 

@@ -6,7 +6,4 @@ public class DuplicateWalletNameException extends RuntimeException {
         super(message);
     }
 
-    public DuplicateWalletNameException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

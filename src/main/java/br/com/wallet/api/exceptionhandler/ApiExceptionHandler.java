@@ -50,6 +50,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, problemDetail, new HttpHeaders(), status, request);
     }
 
+    @ExceptionHandler(NullPointerException.class)
+    public ResponseEntity<Object> handleNullPointer(@NonNull NullPointerException ex, @NonNull WebRequest request) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+
+        ProblemDetail problemDetail = ProblemDetail.builder()
+                .status(status.value())
+                .title("Business rule violation")
+                .detail(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return handleExceptionInternal(ex, problemDetail, new HttpHeaders(), status, request);
+    }
+
     @ExceptionHandler(DuplicateWalletNameException.class)
     public ResponseEntity<Object> handleDuplicateWalletName(@NonNull DuplicateWalletNameException ex, @NonNull WebRequest request) {
         HttpStatus status = HttpStatus.CONFLICT;

@@ -16,7 +16,6 @@ public record TransactionRequest(
 
         UUID toUserId,
 
-        @NotNull(message = "Transaction type is required")
         Transaction.TransactionType type,
 
         @NotNull(message = "Amount is required")
