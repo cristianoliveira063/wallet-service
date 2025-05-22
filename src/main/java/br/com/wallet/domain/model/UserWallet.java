@@ -53,9 +53,8 @@ public class UserWallet {
 
     @PrePersist
     public void prePersist() {
-        if (isNull(id)) {
-            id = UuidCreator.getTimeOrdered();
-        }
+        id = UuidCreator.getTimeOrdered();
+
         LocalDateTime now = LocalDateTime.now();
         if (isNull(createdAt)) {
             createdAt = now;

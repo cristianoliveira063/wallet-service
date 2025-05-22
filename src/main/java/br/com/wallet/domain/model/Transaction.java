@@ -22,8 +22,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import static java.util.Objects.isNull;
-
 @Entity
 @Table(name = "transactions")
 @Data
@@ -32,7 +30,6 @@ import static java.util.Objects.isNull;
 @AllArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Transaction {
-
 
     @Id
     @EqualsAndHashCode.Include
@@ -70,12 +67,8 @@ public class Transaction {
 
     @PrePersist
     public void prePersist() {
-        if (isNull(id)) {
-            id = UuidCreator.getTimeOrdered();
-        }
-        if (isNull(createdAt)) {
-            createdAt = LocalDateTime.now();
-        }
+        id = UuidCreator.getTimeOrdered();
+        createdAt = LocalDateTime.now();
     }
 
     public enum TransactionType {

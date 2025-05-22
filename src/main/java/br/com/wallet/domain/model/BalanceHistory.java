@@ -45,9 +45,7 @@ public class BalanceHistory {
 
     @PrePersist
     public void prePersist() {
-        if (isNull(id)) {
-            id = UuidCreator.getTimeOrdered();
-        }
+        id = UuidCreator.getTimeOrdered();
         if (isNull(recordedAt)) {
             recordedAt = LocalDateTime.now();
         }
