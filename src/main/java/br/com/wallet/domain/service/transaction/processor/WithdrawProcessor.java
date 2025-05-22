@@ -31,7 +31,7 @@ public class WithdrawProcessor implements TransactionProcessor {
         transactionValidator.validateTransactionType(transaction, Transaction.TransactionType.WITHDRAW);
         transactionValidator.validateAmount(transaction.getAmount());
 
-        UserWallet userWallet = userWalletFinder.getUserWalletOrThrow(
+        UserWallet userWallet = userWalletFinder.getUserWalletWithLockOrThrow(
                 transaction.getFromUserId(),
                 transaction.getWallet().getId(),
                 "UserWallet not found with userId: "

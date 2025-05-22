@@ -14,10 +14,11 @@ public class UserWalletFinder {
 
     private final UserWalletRepository userWalletRepository;
 
-    public UserWallet getUserWalletOrThrow(UUID userId, UUID walletId, String notFoundMessage) {
-        return userWalletRepository.findByUserIdAndWalletId(userId, walletId)
+    public UserWallet getUserWalletWithLockOrThrow(UUID userId, UUID walletId, String notFoundMessage) {
+        return userWalletRepository.findByUserIdAndWalletIdWithPessimisticLock(userId, walletId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         notFoundMessage + userId + " and walletId: " + walletId
                 ));
     }
+
 }

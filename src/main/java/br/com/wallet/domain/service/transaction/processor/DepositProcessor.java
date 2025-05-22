@@ -31,7 +31,7 @@ public class DepositProcessor implements TransactionProcessor {
         transactionValidator.validateTransactionType(transaction, Transaction.TransactionType.DEPOSIT);
         transactionValidator.validateAmount(transaction.getAmount());
 
-        UserWallet userWallet = userWalletFinder.getUserWalletOrThrow(
+        UserWallet userWallet = userWalletFinder.getUserWalletWithLockOrThrow(
                 transaction.getToUserId(),
                 transaction.getWallet().getId(),
                 "UserWallet not found with userId: "

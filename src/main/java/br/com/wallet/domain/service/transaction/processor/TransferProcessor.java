@@ -35,7 +35,7 @@ public class TransferProcessor implements TransactionProcessor {
         transactionValidator.validateAmount(transaction.getAmount());
         transactionValidator.validateTransferUsers(transaction);
 
-        UserWallet sourceUserWallet = userWalletFinder.getUserWalletOrThrow(
+        UserWallet sourceUserWallet = userWalletFinder.getUserWalletWithLockOrThrow(
                 transaction.getFromUserId(),
                 transaction.getWallet().getId(),
                 "Source UserWallet not found with userId: "
@@ -48,7 +48,8 @@ public class TransferProcessor implements TransactionProcessor {
             throw new IllegalArgumentException("Destination wallet ID is required for transfers");
         }
 
-        UserWallet targetUserWallet = userWalletFinder.getUserWalletOrThrow(
+        // Get target user wallet with pessimistic lock to prevent concurrent modifications
+        UserWallet targetUserWallet = userWalletFinder.getUserWalletWithLockOrThrow(
                 transaction.getToUserId(),
                 destinationWalletId,
                 "Target UserWallet not found with userId: "
