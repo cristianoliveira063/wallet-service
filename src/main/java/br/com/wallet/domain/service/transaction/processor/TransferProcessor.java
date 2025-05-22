@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -42,9 +43,14 @@ public class TransferProcessor implements TransactionProcessor {
 
         transactionValidator.validateSufficientBalance(sourceUserWallet, transaction.getAmount());
 
+        UUID destinationWalletId = transaction.getDestinationWalletId();
+        if (destinationWalletId == null) {
+            throw new IllegalArgumentException("Destination wallet ID is required for transfers");
+        }
+
         UserWallet targetUserWallet = userWalletFinder.getUserWalletOrThrow(
                 transaction.getToUserId(),
-                transaction.getWallet().getId(),
+                destinationWalletId,
                 "Target UserWallet not found with userId: "
         );
 
@@ -70,6 +76,7 @@ public class TransferProcessor implements TransactionProcessor {
                 .amount(sourceTransaction.getAmount())
                 .description(sourceTransaction.getDescription())
                 .relatedTransaction(savedSourceTransaction)
+                .destinationWalletId(sourceTransaction.getDestinationWalletId())
                 .build();
     }
 }

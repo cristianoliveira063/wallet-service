@@ -9,8 +9,10 @@ import java.util.Objects;
 import java.util.UUID;
 
 public record TransactionRequest(
-        @NotNull(message = "Wallet ID is required")
+        @NotNull(message = "Origin Wallet ID is required")
         UUID walletId,
+
+        UUID destinationWalletId,
 
         UUID fromUserId,
 
@@ -28,12 +30,9 @@ public record TransactionRequest(
 ) {
 
     public void validate() {
-        Objects.requireNonNull(walletId, "Wallet ID is required");
+        Objects.requireNonNull(walletId, "Origin Wallet ID is required");
         Objects.requireNonNull(amount, "Amount is required");
-
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Amount must be greater than zero");
-        }
+        Objects.requireNonNull(type, "Transaction type is required");
 
         switch (type) {
             case DEPOSIT:
@@ -56,6 +55,9 @@ public record TransactionRequest(
         if (Objects.nonNull(fromUserId)) {
             throw new IllegalArgumentException("From user ID should not be specified for deposits");
         }
+        if (Objects.nonNull(destinationWalletId)) {
+            throw new IllegalArgumentException("Destination Wallet ID should not be specified for deposits");
+        }
     }
 
     private void validateWithdraw() {
@@ -64,11 +66,18 @@ public record TransactionRequest(
         if (Objects.nonNull(toUserId)) {
             throw new IllegalArgumentException("To user ID should not be specified for withdrawals");
         }
+        if (Objects.nonNull(destinationWalletId)) {
+            throw new IllegalArgumentException("Destination Wallet ID should not be specified for withdrawals");
+        }
     }
 
     private void validateTransfer() {
         Objects.requireNonNull(fromUserId, "From user ID is required for transfers");
         Objects.requireNonNull(toUserId, "To user ID is required for transfers");
+        Objects.requireNonNull(destinationWalletId, "Destination Wallet ID is required for transfers");
 
+        if (walletId.equals(destinationWalletId)) {
+            throw new IllegalArgumentException("Origin and destination wallets must be different for transfers");
+        }
     }
 }

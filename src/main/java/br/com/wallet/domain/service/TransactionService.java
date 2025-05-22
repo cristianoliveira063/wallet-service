@@ -51,11 +51,13 @@ public class TransactionService {
     }
 
     public Transaction findById(UUID id) {
+        Objects.requireNonNull(id, "Transaction ID cannot be null");
         return transactionRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Transaction not found with id: " + id));
     }
 
     private TransactionProcessor getProcessorForType(Transaction.TransactionType transactionType) {
+        Objects.requireNonNull(transactionType, "Transaction type cannot be null");
         return transactionProcessors.stream()
                 .filter(processor -> processor.canProcess(transactionType))
                 .findFirst()

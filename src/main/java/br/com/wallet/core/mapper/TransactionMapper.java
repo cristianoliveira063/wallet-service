@@ -17,12 +17,14 @@ public interface TransactionMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "wallet.id", source = "walletId")
     @Mapping(target = "relatedTransaction.id", source = "relatedTransactionId")
+    @Mapping(target = "destinationWalletId", source = "destinationWalletId")
     Transaction toEntity(TransactionRequest request);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "wallet.id", source = "walletId")
     @Mapping(target = "relatedTransaction.id", source = "relatedTransactionId")
+    @Mapping(target = "destinationWalletId", source = "destinationWalletId")
     void updateEntityFromRequest(TransactionRequest request, @MappingTarget Transaction transaction);
 
     @Mapping(target = "walletId", source = "wallet.id")

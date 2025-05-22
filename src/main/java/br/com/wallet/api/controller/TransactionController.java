@@ -72,27 +72,34 @@ public class TransactionController {
             Transaction.TransactionType transactionType,
             UnaryOperator<Transaction> transactionProcessor) {
 
-        TransactionRequest requestWithCorrectType = new TransactionRequest(
-                transactionRequest.walletId(),
-                transactionRequest.fromUserId(),
-                transactionRequest.toUserId(),
-                transactionType,
-                transactionRequest.amount(),
-                transactionRequest.description(),
-                transactionRequest.relatedTransactionId()
-        );
+        TransactionRequest transactionRequestWithType = buildTransactionRequestWithType(transactionRequest, transactionType);
+        transactionRequestWithType.validate();
 
-        requestWithCorrectType.validate();
+        Transaction transactionEntity = transactionAssembler.mapToTransactionEntityFromRequest(transactionRequestWithType);
 
-        Transaction transaction = transactionAssembler.mapToTransactionEntityFromRequest(requestWithCorrectType);
-
-        Transaction savedTransaction = transactionService.processTransactionWithWallet(
-                transaction,
-                requestWithCorrectType.walletId(),
+        Transaction processedTransaction = transactionService.processTransactionWithWallet(
+                transactionEntity,
+                transactionRequestWithType.walletId(),
                 transactionProcessor
         );
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(transactionAssembler.mapToTransactionResponseFromEntity(savedTransaction));
+        TransactionResponse response = transactionAssembler.mapToTransactionResponseFromEntity(processedTransaction);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    private TransactionRequest buildTransactionRequestWithType(
+            TransactionRequest originalRequest,
+            Transaction.TransactionType transactionType) {
+        return new TransactionRequest(
+                originalRequest.walletId(),
+                originalRequest.destinationWalletId(),
+                originalRequest.fromUserId(),
+                originalRequest.toUserId(),
+                transactionType,
+                originalRequest.amount(),
+                originalRequest.description(),
+                originalRequest.relatedTransactionId()
+        );
     }
 }
