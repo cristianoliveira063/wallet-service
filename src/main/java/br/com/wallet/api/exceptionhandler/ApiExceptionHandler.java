@@ -1,5 +1,7 @@
 package br.com.wallet.api.exceptionhandler;
 
+import br.com.wallet.domain.exception.DuplicateUserWalletException;
+import br.com.wallet.domain.exception.DuplicateWalletNameException;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -41,6 +43,34 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problemDetail = ProblemDetail.builder()
                 .status(status.value())
                 .title("Business rule violation")
+                .detail(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return handleExceptionInternal(ex, problemDetail, new HttpHeaders(), status, request);
+    }
+
+    @ExceptionHandler(DuplicateWalletNameException.class)
+    public ResponseEntity<Object> handleDuplicateWalletName(@NonNull DuplicateWalletNameException ex, @NonNull WebRequest request) {
+        HttpStatus status = HttpStatus.CONFLICT;
+
+        ProblemDetail problemDetail = ProblemDetail.builder()
+                .status(status.value())
+                .title("Duplicate wallet name")
+                .detail(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return handleExceptionInternal(ex, problemDetail, new HttpHeaders(), status, request);
+    }
+
+    @ExceptionHandler(DuplicateUserWalletException.class)
+    public ResponseEntity<Object> handleDuplicateUserWallet(@NonNull DuplicateUserWalletException ex, @NonNull WebRequest request) {
+        HttpStatus status = HttpStatus.CONFLICT;
+
+        ProblemDetail problemDetail = ProblemDetail.builder()
+                .status(status.value())
+                .title("Duplicate user-wallet association")
                 .detail(ex.getMessage())
                 .timestamp(LocalDateTime.now())
                 .build();

@@ -3,8 +3,10 @@ package br.com.wallet.domain.service;
 import br.com.wallet.domain.model.BalanceHistory;
 import br.com.wallet.domain.model.Transaction;
 import br.com.wallet.domain.model.UserWallet;
+import br.com.wallet.domain.model.Wallet;
 import br.com.wallet.domain.repository.BalanceHistoryRepository;
 import br.com.wallet.domain.repository.TransactionRepository;
+import br.com.wallet.domain.repository.UserWalletRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,24 +15,29 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 @Service
 @RequiredArgsConstructor
 public class TransactionService {
 
     private final TransactionRepository transactionRepository;
-    private final UserWalletService userWalletService;
-    private final WalletService walletService;
+    private final UserWalletRepository userWalletRepository;
     private final BalanceHistoryRepository balanceHistoryRepository;
+    private final WalletService walletService;
 
-    public List<Transaction> findAll() {
-        return transactionRepository.findAll();
-    }
+    @Transactional
+    public Transaction processTransactionWithWallet(Transaction transaction, UUID walletId, UnaryOperator<Transaction> transactionProcessor) {
+        Objects.requireNonNull(transaction, "Transaction cannot be null");
+        Objects.requireNonNull(walletId, "Wallet ID cannot be null");
+        Objects.requireNonNull(transactionProcessor, "Transaction processor cannot be null");
 
-    public Transaction findById(UUID id) {
-        return transactionRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Transaction not found with id: " + id));
+        Wallet wallet = findWalletById(walletId);
+        transaction.setWallet(wallet);
+
+        return transactionProcessor.apply(transaction);
     }
 
     @Transactional
@@ -38,13 +45,20 @@ public class TransactionService {
         validateTransactionType(transaction, Transaction.TransactionType.DEPOSIT);
         validateAmount(transaction.getAmount());
 
-        UserWallet userWallet = userWalletService.findByUserIdAndWalletId(
+        Optional<UserWallet> optionalUserWallet = userWalletRepository.findByUserIdAndWalletId(
                 transaction.getToUserId(), transaction.getWallet().getId());
 
+        if (optionalUserWallet.isEmpty()) {
+            throw new EntityNotFoundException("UserWallet not found with userId: " +
+                    transaction.getToUserId() + " and walletId: " + transaction.getWallet().getId());
+        }
+
+        UserWallet userWallet = optionalUserWallet.get();
         updateWalletBalance(userWallet, transaction.getAmount(), true);
 
-        return transactionRepository.save(transaction);
+        transaction.setRelatedTransaction(null);
 
+        return transactionRepository.save(transaction);
     }
 
     @Transactional
@@ -52,15 +66,20 @@ public class TransactionService {
         validateTransactionType(transaction, Transaction.TransactionType.WITHDRAW);
         validateAmount(transaction.getAmount());
 
-        UserWallet userWallet = userWalletService.findByUserIdAndWalletId(
+        Optional<UserWallet> optionalUserWallet = userWalletRepository.findByUserIdAndWalletId(
                 transaction.getFromUserId(), transaction.getWallet().getId());
 
+        if (optionalUserWallet.isEmpty()) {
+            throw new EntityNotFoundException("UserWallet not found with userId: " +
+                    transaction.getFromUserId() + " and walletId: " + transaction.getWallet().getId());
+        }
+
+        UserWallet userWallet = optionalUserWallet.get();
         validateSufficientBalance(userWallet, transaction.getAmount());
 
         updateWalletBalance(userWallet, transaction.getAmount(), false);
 
         return transactionRepository.save(transaction);
-
     }
 
     @Transactional
@@ -69,13 +88,26 @@ public class TransactionService {
         validateAmount(transaction.getAmount());
         validateTransferUsers(transaction);
 
-        UserWallet sourceUserWallet = userWalletService.findByUserIdAndWalletId(
+        Optional<UserWallet> optionalSourceUserWallet = userWalletRepository.findByUserIdAndWalletId(
                 transaction.getFromUserId(), transaction.getWallet().getId());
 
+        if (optionalSourceUserWallet.isEmpty()) {
+            throw new EntityNotFoundException("Source UserWallet not found with userId: " +
+                    transaction.getFromUserId() + " and walletId: " + transaction.getWallet().getId());
+        }
+
+        UserWallet sourceUserWallet = optionalSourceUserWallet.get();
         validateSufficientBalance(sourceUserWallet, transaction.getAmount());
 
-        UserWallet targetUserWallet = userWalletService.findByUserIdAndWalletId(
+        Optional<UserWallet> optionalTargetUserWallet = userWalletRepository.findByUserIdAndWalletId(
                 transaction.getToUserId(), transaction.getWallet().getId());
+
+        if (optionalTargetUserWallet.isEmpty()) {
+            throw new EntityNotFoundException("Target UserWallet not found with userId: " +
+                    transaction.getToUserId() + " and walletId: " + transaction.getWallet().getId());
+        }
+
+        UserWallet targetUserWallet = optionalTargetUserWallet.get();
 
         updateWalletBalance(sourceUserWallet, transaction.getAmount(), false);
         updateWalletBalance(targetUserWallet, transaction.getAmount(), true);
@@ -89,6 +121,15 @@ public class TransactionService {
         transactionRepository.save(savedSourceTransaction);
 
         return savedSourceTransaction;
+    }
+
+    public List<Transaction> findAll() {
+        return transactionRepository.findAll();
+    }
+
+    public Transaction findById(UUID id) {
+        return transactionRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Transaction not found with id: " + id));
     }
 
     private void validateTransactionType(Transaction transaction, Transaction.TransactionType expectedType) {
@@ -132,7 +173,7 @@ public class TransactionService {
         } else {
             userWallet.setBalance(userWallet.getBalance().subtract(amount));
         }
-        userWalletService.save(userWallet);
+        userWalletRepository.save(userWallet);
 
         recordBalanceHistory(userWallet);
     }
@@ -148,7 +189,7 @@ public class TransactionService {
                 .type(Transaction.TransactionType.TRANSFER)
                 .amount(sourceTransaction.getAmount())
                 .description(sourceTransaction.getDescription())
-                .relatedTransaction(savedSourceTransaction) // Link to source transaction
+                .relatedTransaction(savedSourceTransaction)
                 .build();
     }
 
@@ -163,5 +204,9 @@ public class TransactionService {
                 .build();
 
         balanceHistoryRepository.save(balanceHistory);
+    }
+
+    private Wallet findWalletById(UUID walletId) {
+        return walletService.findById(walletId);
     }
 }

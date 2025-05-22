@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @RestController
@@ -37,18 +38,21 @@ public class UserWalletController {
 
     @GetMapping("/{id}")
     public ResponseEntity<UserWalletResponse> findById(@PathVariable UUID id) {
+        Objects.requireNonNull(id, "UserWallet ID cannot be null");
         UserWallet userWallet = userWalletService.findById(id);
         return ResponseEntity.ok(userWalletAssembler.mapToUserWalletResponseFromEntity(userWallet));
     }
 
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<UserWalletResponse>> findByUserId(@PathVariable UUID userId) {
+        Objects.requireNonNull(userId, "User ID cannot be null");
         List<UserWallet> userWallets = userWalletService.findByUserId(userId);
         return ResponseEntity.ok(userWalletAssembler.mapToUserWalletResponseListFromEntities(userWallets));
     }
 
     @GetMapping("/wallet/{walletId}")
     public ResponseEntity<List<UserWalletResponse>> findByWalletId(@PathVariable UUID walletId) {
+        Objects.requireNonNull(walletId, "Wallet ID cannot be null");
         List<UserWallet> userWallets = userWalletService.findByWalletId(walletId);
         return ResponseEntity.ok(userWalletAssembler.mapToUserWalletResponseListFromEntities(userWallets));
     }
@@ -56,12 +60,15 @@ public class UserWalletController {
     @GetMapping("/user/{userId}/wallet/{walletId}")
     public ResponseEntity<UserWalletResponse> findByUserIdAndWalletId(
             @PathVariable UUID userId, @PathVariable UUID walletId) {
+        Objects.requireNonNull(userId, "User ID cannot be null");
+        Objects.requireNonNull(walletId, "Wallet ID cannot be null");
         UserWallet userWallet = userWalletService.findByUserIdAndWalletId(userId, walletId);
         return ResponseEntity.ok(userWalletAssembler.mapToUserWalletResponseFromEntity(userWallet));
     }
 
     @PostMapping
     public ResponseEntity<UserWalletResponse> create(@RequestBody @Valid UserWalletRequest userWalletRequest) {
+        Objects.requireNonNull(userWalletRequest, "UserWalletRequest cannot be null");
         UserWallet userWallet = userWalletAssembler.mapToUserWalletEntityFromRequest(userWalletRequest);
         UserWallet savedUserWallet = userWalletService.save(userWallet);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -71,6 +78,8 @@ public class UserWalletController {
     @PutMapping("/{id}")
     public ResponseEntity<UserWalletResponse> update(
             @PathVariable UUID id, @RequestBody @Valid UserWalletRequest userWalletRequest) {
+        Objects.requireNonNull(id, "UserWallet ID cannot be null");
+        Objects.requireNonNull(userWalletRequest, "UserWalletRequest cannot be null");
         UserWallet userWallet = userWalletAssembler.mapToUserWalletEntityFromRequest(userWalletRequest);
         UserWallet updatedUserWallet = userWalletService.update(id, userWallet);
         return ResponseEntity.ok(userWalletAssembler.mapToUserWalletResponseFromEntity(updatedUserWallet));
@@ -78,6 +87,7 @@ public class UserWalletController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        Objects.requireNonNull(id, "UserWallet ID cannot be null");
         userWalletService.delete(id);
         return ResponseEntity.noContent().build();
     }

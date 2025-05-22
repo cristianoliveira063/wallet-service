@@ -1,5 +1,6 @@
 package br.com.wallet.domain.service;
 
+import br.com.wallet.domain.exception.DuplicateWalletNameException;
 import br.com.wallet.domain.model.Wallet;
 import br.com.wallet.domain.repository.WalletRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -27,12 +28,24 @@ public class WalletService {
 
     @Transactional
     public Wallet save(Wallet wallet) {
+        walletRepository.findByName(wallet.getName())
+                .ifPresent(existingWallet -> {
+                    throw new DuplicateWalletNameException("Wallet with name '" + wallet.getName() + "' already exists");
+                });
         return walletRepository.save(wallet);
     }
 
     @Transactional
     public Wallet update(UUID id, Wallet wallet) {
         Wallet existingWallet = findById(id);
+
+        if (!existingWallet.getName().equals(wallet.getName())) {
+            walletRepository.findByName(wallet.getName())
+                    .ifPresent(duplicateWallet -> {
+                        throw new DuplicateWalletNameException("Wallet with name '" + wallet.getName() + "' already exists");
+                    });
+        }
+
         wallet.setId(existingWallet.getId());
         wallet.setCreatedAt(existingWallet.getCreatedAt());
         return walletRepository.save(wallet);

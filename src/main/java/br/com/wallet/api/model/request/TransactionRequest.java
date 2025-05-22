@@ -8,10 +8,6 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * Request DTO for transaction operations.
- * Contains all necessary fields for creating deposits, withdrawals, and transfers.
- */
 public record TransactionRequest(
         @NotNull(message = "Wallet ID is required")
         UUID walletId,
@@ -75,8 +71,5 @@ public record TransactionRequest(
         Objects.requireNonNull(fromUserId, "From user ID is required for transfers");
         Objects.requireNonNull(toUserId, "To user ID is required for transfers");
 
-        if (fromUserId.equals(toUserId)) {
-            throw new IllegalArgumentException("From user ID and To user ID cannot be the same for transfers");
-        }
     }
 }

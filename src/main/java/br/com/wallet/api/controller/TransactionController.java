@@ -29,7 +29,6 @@ public class TransactionController {
 
     private final TransactionService transactionService;
     private final TransactionAssembler transactionAssembler;
-    private final WalletService walletService;
 
     @GetMapping
     public ResponseEntity<List<TransactionResponse>> findAll() {
@@ -80,10 +79,11 @@ public class TransactionController {
         Transaction transaction = transactionAssembler.mapToTransactionEntityFromRequest(transactionRequest);
         transaction.setType(transactionType);
 
-        Wallet wallet = walletService.findById(transactionRequest.walletId());
-        transaction.setWallet(wallet);
-
-        Transaction savedTransaction = transactionProcessor.apply(transaction);
+        Transaction savedTransaction = transactionService.processTransactionWithWallet(
+                transaction, 
+                transactionRequest.walletId(), 
+                transactionProcessor
+        );
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(transactionAssembler.mapToTransactionResponseFromEntity(savedTransaction));
