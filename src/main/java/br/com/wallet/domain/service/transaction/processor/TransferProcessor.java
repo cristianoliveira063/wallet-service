@@ -48,7 +48,6 @@ public class TransferProcessor implements TransactionProcessor {
             throw new IllegalArgumentException("Destination wallet ID is required for transfers");
         }
 
-        // Get target user wallet with pessimistic lock to prevent concurrent modifications
         UserWallet targetUserWallet = userWalletFinder.getUserWalletWithLockOrThrow(
                 transaction.getToUserId(),
                 destinationWalletId,
