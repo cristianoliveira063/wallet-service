@@ -58,18 +58,21 @@ public class TransferProcessor implements TransactionProcessor {
         balanceManager.creditUserWallet(targetUserWallet, transaction.getAmount());
 
         Transaction savedSourceTransaction = transactionRepository.save(transaction);
-        Transaction targetTransaction = createRelatedTransaction(transaction, savedSourceTransaction);
+        Transaction targetTransaction = createRelatedTransaction(transaction, savedSourceTransaction, targetUserWallet);
         Transaction savedTargetTransaction = transactionRepository.save(targetTransaction);
 
         savedSourceTransaction.setRelatedTransaction(savedTargetTransaction);
         return transactionRepository.save(savedSourceTransaction);
     }
 
-    private Transaction createRelatedTransaction(Transaction sourceTransaction, Transaction savedSourceTransaction) {
+    private Transaction createRelatedTransaction(Transaction sourceTransaction,
+                                                 Transaction savedSourceTransaction,
+                                                 UserWallet targetUserWallet) {
         Objects.requireNonNull(sourceTransaction, "Source transaction cannot be null");
         Objects.requireNonNull(savedSourceTransaction, "Saved source transaction cannot be null");
+        Objects.requireNonNull(targetUserWallet, "Target user wallet cannot be null");
         return Transaction.builder()
-                .wallet(sourceTransaction.getWallet())
+                .wallet(targetUserWallet.getWallet())
                 .fromUserId(sourceTransaction.getFromUserId())
                 .toUserId(sourceTransaction.getToUserId())
                 .type(Transaction.TransactionType.TRANSFER)
